@@ -1,0 +1,14 @@
+{
+  "name": "harvest-hollow",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Harvest Hollow — a single-file browser farming simulator.",
+  "scripts": {
+    "shoot": "node tools/shoot.mjs",
+    "test": "node tools/acceptance.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.48.0"
+  }
+}
