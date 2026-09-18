@@ -191,6 +191,7 @@
       <button class="bigbtn" id="btnResume">Resume</button>
       <button class="btn" id="btnPauseHelp" style="justify-content:center">How to play</button>
       <button class="btn" id="btnSave" style="justify-content:center">💾 Save game</button>
+      <button class="btn" id="btnMute" style="justify-content:center">🔊 Sound: On</button>
       <button class="btn" id="btnReset" style="justify-content:center;border-color:#a5493f">↺ Reset game</button>
     </div>
     <p class="muted" style="margin-top:14px">Progress auto-saves each night.</p>
@@ -607,70 +608,260 @@ const ART = (()=>{
 
 /* ------------------------------ AUDIO ----------------------------------- */
 /* Lightweight Web Audio synth. The audio pass expands this. */
+/* ------------------------------ AUDIO ----------------------------------- *
+ * Fully synthesized, warm & cozy farm soundscape via the Web Audio API.
+ * No audio files, no libraries. Everything is guarded so a browser that
+ * blocks/lacks audio can never throw or break the game.                    */
 const AUDIO = (()=>{
-  let ctx=null, master=null, musicGain=null, enabled=true, started=false;
+  let ctx=null, master=null, musicGain=null, sfxGain=null, reverbBus=null;
+  let noiseBuf=null, enabled=true, pendingWeather='clear', stepFlip=false;
+
+  // ---- buffer generators ------------------------------------------------
+  function makeNoise(seconds){
+    try{
+      const len=Math.max(1,Math.floor(ctx.sampleRate*(seconds||2)));
+      const b=ctx.createBuffer(1,len,ctx.sampleRate), d=b.getChannelData(0);
+      for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+      return b;
+    }catch(e){ return null; }
+  }
+  function makeImpulse(dur,decay){
+    try{
+      const len=Math.max(1,Math.floor(ctx.sampleRate*dur));
+      const b=ctx.createBuffer(2,len,ctx.sampleRate);
+      for(let c=0;c<2;c++){
+        const d=b.getChannelData(c);
+        for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);
+      }
+      return b;
+    }catch(e){ return null; }
+  }
+
+  // ---- lifecycle --------------------------------------------------------
   function init(){
     if(ctx) return;
     try{
-      ctx=new (window.AudioContext||window.webkitAudioContext)();
-      master=ctx.createGain();master.gain.value=0.5;master.connect(ctx.destination);
-      musicGain=ctx.createGain();musicGain.gain.value=0.18;musicGain.connect(master);
-    }catch(e){enabled=false;}
+      const AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC){ enabled=false; return; }
+      ctx=new AC();
+      master=ctx.createGain(); master.gain.value=enabled?0.5:0.0001; master.connect(ctx.destination);
+      musicGain=ctx.createGain(); musicGain.gain.value=0.13; musicGain.connect(master);
+      sfxGain=ctx.createGain(); sfxGain.gain.value=0.9; sfxGain.connect(master);
+      // synthesized reverb send (ConvolverNode fed by a decaying-noise impulse)
+      reverbBus=ctx.createGain(); reverbBus.gain.value=1;
+      const conv=ctx.createConvolver(); const imp=makeImpulse(2.6,3.2);
+      if(imp){ conv.buffer=imp; const wet=ctx.createGain(); wet.gain.value=0.55;
+               reverbBus.connect(conv); conv.connect(wet); wet.connect(master); }
+      noiseBuf=makeNoise(2);
+      if(pendingWeather==='rain') setWeather('rain');
+    }catch(e){ enabled=false; ctx=null; }
   }
-  function resume(){ if(ctx&&ctx.state==='suspended')ctx.resume(); }
-  function beep(freq,dur,type='sine',vol=0.3,when=0){
-    if(!enabled||!ctx)return;
-    const t=ctx.currentTime+when;
-    const o=ctx.createOscillator(),g=ctx.createGain();
-    o.type=type;o.frequency.value=freq;
-    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-    o.connect(g);g.connect(master);o.start(t);o.stop(t+dur+0.02);
+  function resume(){ try{ if(ctx&&ctx.state==='suspended') ctx.resume(); }catch(e){} }
+
+  // ---- low-level voices -------------------------------------------------
+  function tone(opt){
+    if(!ctx) return;
+    try{
+      const t=ctx.currentTime+(opt.when||0), dur=opt.dur||0.2;
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type=opt.type||'sine';
+      o.frequency.setValueAtTime(Math.max(1,opt.freq),t);
+      if(opt.freqEnd) o.frequency.exponentialRampToValueAtTime(Math.max(1,opt.freqEnd),t+dur);
+      if(opt.detune) o.detune.value=opt.detune;
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(opt.vol??0.2,t+(opt.a??0.008));
+      g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      o.connect(g);
+      let out=g;
+      if(opt.cutoff){ const lp=ctx.createBiquadFilter(); lp.type='lowpass';
+        lp.frequency.value=opt.cutoff; if(opt.q)lp.Q.value=opt.q; g.connect(lp); out=lp; }
+      out.connect(opt.dest||sfxGain);
+      if(opt.reverb&&reverbBus) out.connect(reverbBus);
+      o.start(t); o.stop(t+dur+0.06);
+    }catch(e){}
   }
+  function noiseBurst(opt){
+    if(!ctx||!noiseBuf) return;
+    try{
+      const t=ctx.currentTime+(opt.when||0), dur=opt.dur||0.2;
+      const s=ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+      const g=ctx.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(opt.vol??0.15,t+(opt.a??0.01));
+      g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      const f=ctx.createBiquadFilter(); f.type=opt.type||'lowpass';
+      f.frequency.setValueAtTime(Math.max(40,opt.f0||1000),t);
+      if(opt.f1) f.frequency.exponentialRampToValueAtTime(Math.max(40,opt.f1),t+dur);
+      if(opt.q) f.Q.value=opt.q;
+      s.connect(f); f.connect(g); g.connect(opt.dest||sfxGain);
+      if(opt.reverb&&reverbBus) g.connect(reverbBus);
+      s.start(t); s.stop(t+dur+0.06);
+    }catch(e){}
+  }
+
+  // ---- SFX --------------------------------------------------------------
   const sfx={
-    hoe:()=>{beep(180,0.12,'square',0.18);beep(90,0.16,'triangle',0.12,0.02);},
-    plant:()=>beep(520,0.09,'sine',0.16),
-    water:()=>{for(let i=0;i<4;i++)beep(600+i*120,0.06,'sine',0.08,i*0.03);},
-    harvest:()=>{beep(660,0.08,'sine',0.2);beep(880,0.10,'sine',0.18,0.06);beep(1100,0.12,'sine',0.16,0.12);},
-    buy:()=>{beep(880,0.07,'triangle',0.18);beep(1170,0.09,'triangle',0.16,0.05);},
-    sell:()=>{beep(700,0.07,'triangle',0.16);beep(520,0.09,'triangle',0.14,0.05);},
-    error:()=>beep(140,0.14,'sawtooth',0.14),
-    ui:()=>beep(440,0.05,'sine',0.1),
-    sleep:()=>{beep(300,0.4,'sine',0.14);beep(200,0.6,'sine',0.12,0.2);},
-    egg:()=>beep(980,0.08,'sine',0.14),
-    levelup:()=>{[523,659,784,1046].forEach((f,i)=>beep(f,0.14,'triangle',0.16,i*0.08));},
+    // earthy thud + a puff of loose dirt
+    hoe:()=>{ tone({freq:150,freqEnd:58,dur:0.18,type:'sine',vol:0.28,a:0.004,cutoff:500});
+              noiseBurst({dur:0.15,vol:0.13,f0:900,f1:170,type:'lowpass',a:0.002}); },
+    // gentle poke into soil
+    plant:()=>{ tone({freq:420,freqEnd:560,dur:0.09,type:'sine',vol:0.13,a:0.004});
+                noiseBurst({dur:0.05,vol:0.045,f0:1300,type:'lowpass'}); },
+    // soft watery trickle: filtered noise bursts sweeping upward
+    water:()=>{ for(let i=0;i<3;i++) noiseBurst({when:i*0.055,dur:0.16,vol:0.09,f0:420,f1:2400,type:'bandpass',q:2,a:0.012});
+                noiseBurst({dur:0.28,vol:0.045,f0:1600,type:'lowpass',reverb:true}); },
+    // bright pluck arpeggio
+    harvest:()=>{ const b=523.25; [0,4,7,12].forEach((s,i)=>
+                  tone({freq:b*Math.pow(2,s/12),dur:0.5,type:'triangle',vol:0.13,a:0.004,when:i*0.06,cutoff:3200,reverb:true})); },
+    // pleasant two-note coin chime
+    buy:()=>{ tone({freq:1318.5,dur:0.13,type:'sine',vol:0.13,a:0.002,reverb:true});
+              tone({freq:1975.5,dur:0.2,type:'sine',vol:0.11,a:0.002,when:0.05,reverb:true}); },
+    // soft register ding
+    sell:()=>{ tone({freq:880,dur:0.1,type:'triangle',vol:0.13,a:0.003});
+               tone({freq:587.33,dur:0.16,type:'triangle',vol:0.11,a:0.003,when:0.06});
+               noiseBurst({when:0.15,dur:0.05,vol:0.05,f0:3000,type:'bandpass',q:3}); },
+    // gentle low "nope" (never harsh)
+    error:()=>{ tone({freq:200,freqEnd:150,dur:0.18,type:'triangle',vol:0.11,a:0.006,cutoff:600});
+                tone({freq:150,freqEnd:118,dur:0.2,type:'sine',vol:0.07,a:0.006,when:0.05}); },
+    ui:()=>tone({freq:660,dur:0.05,type:'sine',vol:0.07,a:0.002}),
+    // soft downward lull into sleep
+    sleep:()=>{ tone({freq:330,freqEnd:110,dur:0.9,type:'sine',vol:0.14,a:0.02,cutoff:1200,reverb:true});
+                tone({freq:220,freqEnd:82,dur:1.2,type:'triangle',vol:0.1,a:0.03,when:0.15,cutoff:800,reverb:true}); },
+    egg:()=>tone({freq:900,freqEnd:1100,dur:0.12,type:'sine',vol:0.12,a:0.003,reverb:true}),
+    // warm ascending fanfare
+    levelup:()=>{ const b=392; [0,4,7,12,16].forEach((s,i)=>{
+                    tone({freq:b*Math.pow(2,s/12),dur:0.6,type:'triangle',vol:0.13,a:0.006,when:i*0.09,cutoff:3200,reverb:true});
+                    tone({freq:b*Math.pow(2,s/12)/2,dur:0.6,type:'sine',vol:0.055,a:0.006,when:i*0.09}); }); },
+    // subtle soft footstep, alternating feet
+    step:()=>{ stepFlip=!stepFlip;
+               noiseBurst({dur:0.08,vol:0.055,f0:stepFlip?520:440,f1:120,type:'lowpass',a:0.002});
+               tone({freq:stepFlip?92:78,freqEnd:54,dur:0.06,type:'sine',vol:0.055,a:0.002}); },
   };
-  function play(name){ try{sfx[name]&&sfx[name]();}catch(e){} }
-  // simple seasonal ambient pad
-  let musicTimer=null, musicSeason=null;
-  const scales={
-    Spring:[0,2,4,7,9], Summer:[0,2,4,5,7,9,11], Fall:[0,3,5,7,10], Winter:[0,2,3,7,8]
+  function play(name){ try{ if(!enabled||!ctx) return; const fn=sfx[name]; if(fn) fn(); }catch(e){} }
+  function step(){ play('step'); }
+
+  // ---- generative seasonal music ---------------------------------------
+  // Per-season: root note, a gentle chord progression, a pentatonic melody
+  // pool, pad timbre, filter cutoff, bar length and melody density.
+  const SEASONS={
+    // Bright / major
+    Spring:{ root:261.63/*C4*/, prog:[[0,4,7],[5,9,12],[7,11,14],[9,12,16]],
+             pent:[0,2,4,7,9,12,14,16], pad:'triangle', cutoff:1900, bar:6.0, mel:0.75, detune:6 },
+    // Warm / lush (7th chords, mellower filter, slower)
+    Summer:{ root:196.00/*G3*/, prog:[[0,4,7,11],[5,9,12,16],[9,12,16,19],[7,11,14,17]],
+             pent:[0,2,4,7,9,11,14,16], pad:'sawtooth', cutoff:1250, bar:7.0, mel:0.6, detune:9 },
+    // Mellow / minor-ish
+    Fall:{   root:220.00/*A3*/, prog:[[0,3,7],[5,8,12],[3,7,10],[8,12,15]],
+             pent:[0,3,5,7,10,12,15], pad:'triangle', cutoff:1050, bar:7.5, mel:0.55, detune:7 },
+    // Sparse / glassy (pure sines, long reverb tails, high register)
+    Winter:{ root:329.63/*E4*/, prog:[[0,7,12],[3,10,15],[5,12,17],[0,7,14]],
+             pent:[0,3,5,7,10,12,15,19], pad:'sine', cutoff:2800, bar:8.5, mel:0.4, detune:4 },
   };
-  function startMusic(season){
-    if(!enabled||!ctx)return;
-    musicSeason=season;
-    if(musicTimer) return;
-    const root=196; // G3
-    const step=()=>{
-      if(!enabled){return;}
-      const scale=scales[musicSeason]||scales.Spring;
-      const n=scale[(Math.random()*scale.length)|0];
-      const oct=Math.random()<0.4?2:1;
-      const f=root*Math.pow(2,n/12)*oct;
-      const t=ctx.currentTime;
-      const o=ctx.createOscillator(),g=ctx.createGain();
-      o.type='triangle';o.frequency.value=f;
-      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.5,t+0.4);
-      g.gain.exponentialRampToValueAtTime(0.001,t+2.2);
-      o.connect(g);g.connect(musicGain);o.start(t);o.stop(t+2.4);
-      musicTimer=setTimeout(step, 1400+Math.random()*1400);
-    };
-    step();
+  let musicOn=false, musicSeason='Spring', musicTimer=null, progIdx=0;
+  const nf=(root,semi)=>root*Math.pow(2,semi/12);
+
+  function padVoice(f,t,dur,cfg){
+    if(!ctx) return;
+    try{
+      const g=ctx.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(0.12,t+dur*0.4);       // slow swell
+      g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=cfg.cutoff; lp.Q.value=0.6;
+      g.connect(lp); lp.connect(musicGain); if(reverbBus) lp.connect(reverbBus);
+      for(let k=0;k<2;k++){ // two detuned oscillators for chorus warmth
+        const o=ctx.createOscillator(); o.type=cfg.pad; o.frequency.value=f;
+        o.detune.value=(k?cfg.detune:-cfg.detune); o.connect(g); o.start(t); o.stop(t+dur+0.1);
+      }
+    }catch(e){}
   }
-  function setSeason(s){ musicSeason=s; }
-  function toggle(){ enabled=!enabled; if(!enabled&&musicTimer){clearTimeout(musicTimer);musicTimer=null;} else if(enabled){startMusic(musicSeason||'Spring');} return enabled; }
-  function isEnabled(){return enabled;}
-  return { init, resume, play, startMusic, setSeason, toggle, isEnabled };
+  function pluck(f,t,cfg,vol){
+    if(!ctx) return;
+    try{
+      const g=ctx.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(vol,t+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.95);
+      const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=cfg.cutoff*1.5;
+      g.connect(lp); lp.connect(musicGain); if(reverbBus) lp.connect(reverbBus);
+      const o=ctx.createOscillator(); o.type='triangle'; o.frequency.value=f; o.connect(g);
+      const g2=ctx.createGain(); g2.gain.value=0.2;           // faint octave shimmer
+      const o2=ctx.createOscillator(); o2.type='sine'; o2.frequency.value=f*2; o2.connect(g2); g2.connect(g);
+      o.start(t); o.stop(t+1.0); o2.start(t); o2.stop(t+1.0);
+    }catch(e){}
+  }
+  function musicStep(){
+    if(!musicOn||!enabled||!ctx) return;
+    try{
+      const cfg=SEASONS[musicSeason]||SEASONS.Spring;
+      const t=ctx.currentTime+0.06, bar=cfg.bar;
+      const chord=cfg.prog[progIdx%cfg.prog.length]; progIdx++;
+      padVoice(nf(cfg.root,chord[0]-12),t,bar+1.0,cfg);        // soft root bass
+      for(const semi of chord) padVoice(nf(cfg.root,semi),t,bar+0.5,cfg);
+      const notes=2+(Math.random()<cfg.mel?2:1);
+      let idx=(Math.random()*cfg.pent.length)|0;
+      for(let i=0;i<notes;i++){
+        if(i>0 && Math.random()>cfg.mel) continue;             // leave breathing space
+        idx=Math.max(0,Math.min(cfg.pent.length-1,idx+((Math.random()*5)|0)-2));
+        const oct=Math.random()<0.3?12:0;
+        const f=nf(cfg.root,cfg.pent[idx]+12+oct);
+        const when=t+bar*((i+Math.random()*0.55)/notes);
+        pluck(f,when,cfg,0.11+Math.random()*0.05);
+      }
+      musicTimer=setTimeout(musicStep,bar*1000*0.92);
+    }catch(e){}
+  }
+  function startMusic(season){
+    if(season) musicSeason=season;
+    if(!ctx) init();
+    if(!enabled||!ctx||musicOn) return;
+    musicOn=true; progIdx=0; musicStep();
+  }
+  function setSeason(s){ if(s) musicSeason=s; }
+
+  // ---- ambient weather (rain bed) --------------------------------------
+  let rain=null;
+  function setWeather(w){
+    pendingWeather=w;
+    if(!ctx||!enabled) return;
+    try{
+      const wantRain=(w==='rain');
+      if(wantRain && !rain && noiseBuf){
+        const s=ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+        const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=320;
+        const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1500; lp.Q.value=0.3;
+        const g=ctx.createGain(); g.gain.value=0.0001;
+        s.connect(hp); hp.connect(lp); lp.connect(g); g.connect(master); if(reverbBus) g.connect(reverbBus);
+        s.start();
+        g.gain.linearRampToValueAtTime(0.06,ctx.currentTime+2.0);
+        rain={s,g};
+      } else if(!wantRain && rain){
+        const r=rain; rain=null; const now=ctx.currentTime;
+        r.g.gain.cancelScheduledValues(now);
+        r.g.gain.setValueAtTime(Math.max(0.0001,r.g.gain.value),now);
+        r.g.gain.linearRampToValueAtTime(0.0001,now+1.5);
+        try{ r.s.stop(now+1.6); }catch(e){}
+      }
+    }catch(e){}
+  }
+
+  // ---- master enable / mute --------------------------------------------
+  function toggle(){
+    enabled=!enabled;
+    try{
+      if(master&&ctx){ const t=ctx.currentTime;
+        master.gain.cancelScheduledValues(t);
+        master.gain.setValueAtTime(Math.max(0.0001,master.gain.value),t);
+        master.gain.linearRampToValueAtTime(enabled?0.5:0.0001,t+0.2); }
+    }catch(e){}
+    if(enabled){ startMusic(musicSeason); if(pendingWeather==='rain') setWeather('rain'); }
+    else { musicOn=false; if(musicTimer){ clearTimeout(musicTimer); musicTimer=null; }
+           if(rain){ try{ rain.s.stop(); }catch(e){} rain=null; } }
+    return enabled;
+  }
+  function isEnabled(){ return enabled; }
+
+  return { init, resume, play, step, startMusic, setSeason, setWeather, toggle, isEnabled };
 })();
 
 /* ------------------------------ INPUT ----------------------------------- */
@@ -945,6 +1136,7 @@ const Game=(()=>{
     else if(s==='Spring'){ world.weather = r<0.32?'rain': r<0.55?'cloudy':'clear'; }
     else if(s==='Fall'){ world.weather = r<0.28?'rain': r<0.55?'cloudy':'clear'; }
     else { world.weather = r<0.16?'rain': r<0.4?'cloudy':'clear'; }
+    AUDIO.setWeather(world.weather);
   }
 
   /* -------- economy -------- */
@@ -1496,7 +1688,8 @@ const Game=(()=>{
       const sp=CONFIG.playerSpeed*T*dt;
       tryMove(dx*sp,dy*sp);
       player.anim+=dt*10; player.frame=(Math.floor(player.anim)%2);
-    } else player.anim=0;
+      if(player.frame!==player._lastFrame){ AUDIO.step(); player._lastFrame=player.frame; } // footstep on each stride
+    } else { player.anim=0; player._lastFrame=-1; }
 
     // animals wander a little
     for(const a of animals){
@@ -1697,7 +1890,7 @@ const Game=(()=>{
     gold=d.gold;stamina=d.stamina;maxStamina=d.maxStamina;day=d.day;seasonIdx=d.seasonIdx;year=d.year||1;
     selTool=d.selTool||0;selSeed=d.selSeed||'turnip';seeds=d.seeds||{};produce=d.produce||{};inventory=d.inventory||{eggs:0,milk:0};
     tools=Object.assign({waterRange:1,chickens:0,cows:0,feed:0,hoeLevel:1},d.tools||{});
-    world.season=d.season||CONFIG.seasons[seasonIdx];world.weather=d.weather||'clear';
+    world.season=d.season||CONFIG.seasons[seasonIdx];world.weather=d.weather||'clear';AUDIO.setWeather(world.weather);
     player.px=d.player.px;player.py=d.player.py;player.dir=d.player.dir;
     if(d.soil)world.soil=d.soil.map(v=>v?{watered:v===1}:null);
     if(d.crops)world.crops=d.crops.map(c=>c?{id:c.id,stage:c.stage,grown:c.grown,dry:c.dry||0,watered:false,ready:!!c.ready,wilted:!!c.wilted}:null);
@@ -1723,7 +1916,7 @@ const Game=(()=>{
 
   /* ================= WIRING ================= */
   function beginPlay(cont){
-    AUDIO.init();AUDIO.resume();AUDIO.startMusic(world.season);
+    AUDIO.init();AUDIO.resume();AUDIO.startMusic(world.season);AUDIO.setWeather(world.weather);
     if(cont&&hasSave()){ /* already loaded in newGame */ }
     hide('startScreen');
     state='play'; updateHUD(); rebuildToolbar();
@@ -1743,6 +1936,9 @@ const Game=(()=>{
     el('btnResume').onclick=togglePause;
     el('btnSave').onclick=()=>{save();toast('Game saved 💾','good');};
     el('btnReset').onclick=()=>{ if(confirm('Reset all progress and return to title?'))resetGame(); };
+    const muteBtn=el('btnMute');
+    if(muteBtn){ muteBtn.textContent=AUDIO.isEnabled()?'🔊 Sound: On':'🔇 Sound: Off';
+      muteBtn.onclick=()=>{ const on=AUDIO.toggle(); muteBtn.textContent=on?'🔊 Sound: On':'🔇 Sound: Off'; }; }
     el('btnSumOk').onclick=()=>hide('summaryScreen');
     window.addEventListener('resize',()=>{resize();});
     // clicking overlays' backdrop doesn't close (keep intentional)
