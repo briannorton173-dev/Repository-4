@@ -454,45 +454,50 @@ const ART = (()=>{
     const c=make(MW,MH), g=c.getContext('2d');
     const winter=season==='Winter';
     const img=g.createImageData(MW,MH), d=img.data;
-    if(winter){
-      const base=[232,240,249];
-      for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
-        const n=noise(x/6+2,y/6+2)-0.5, n2=noise2(x/2.4+9,y/2.4+9)-0.5;
-        const groove=Math.sin((y/T)*Math.PI*2*3);        // furrow lines (continuous across tiles)
-        let l=n*8+n2*5;
-        const blue= groove<-0.15? (groove+0.15)*14 : 0;  // blue-tinted shadow settled in grooves
-        const i=(y*MW+x)*4;
-        d[i]=clamp(base[0]+l+blue*0.5,0,255); d[i+1]=clamp(base[1]+l+blue*0.28,0,255); d[i+2]=clamp(base[2]+l+blue*0.05,0,255); d[i+3]=255;
-      }
-    } else {
-      const base=[140,104,62];
-      for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
-        const cl=noise(x/3.2+3,y/3.2+3)-0.5, fin=noise2(x/1.5+7,y/1.5+7)-0.5, brd=noise(x/9+1,y/9+1)-0.5;
-        const ridge=Math.sin((y/T)*Math.PI*2*3);
-        let l=cl*20+fin*12+brd*9+ridge*5;
-        const i=(y*MW+x)*4;
-        d[i]=clamp(base[0]+l*1.05,0,255); d[i+1]=clamp(base[1]+l*0.85,0,255); d[i+2]=clamp(base[2]+l*0.62,0,255); d[i+3]=255;
-      }
+    // BROWN tilled-earth base for every season (winter a touch cooler/greyer)
+    const base= winter?[144,116,80]:[140,104,62];
+    for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
+      const cl=noise(x/3.2+3,y/3.2+3)-0.5, fin=noise2(x/1.5+7,y/1.5+7)-0.5, brd=noise(x/9+1,y/9+1)-0.5;
+      const ridge=Math.sin((y/T)*Math.PI*2*3);
+      let l=cl*20+fin*12+brd*9+ridge*5;
+      const i=(y*MW+x)*4;
+      d[i]=clamp(base[0]+l*(winter?0.95:1.05),0,255); d[i+1]=clamp(base[1]+l*0.85,0,255); d[i+2]=clamp(base[2]+l*(winter?0.8:0.62),0,255); d[i+3]=255;
     }
     g.putImageData(img,0,0);
     const rnd=mulberry32(winter?771:337), R=()=>rnd();
+    // shared dug-earth detail: clods, pebbles, broken furrow hints
+    for(let i=0;i<Math.floor(MW*MH/360);i++){const x=R()*MW,y=R()*MH,rx=1.4+R()*2.2,ry=rx*(0.7+R()*0.3);
+      g.fillStyle='rgba(84,58,32,.32)';g.beginPath();g.ellipse(x+0.9,y+0.9,rx,ry,R()*3,0,7);g.fill();
+      g.fillStyle='rgba(196,158,108,.36)';g.beginPath();g.ellipse(x-0.7,y-0.7,rx*0.85,ry*0.85,R()*3,0,7);g.fill();}
+    for(let i=0;i<Math.floor(MW*MH/2600);i++){const x=R()*MW,y=R()*MH;g.fillStyle=R()>0.5?'rgba(150,138,120,.5)':'rgba(120,108,92,.5)';g.beginPath();g.arc(x,y,0.8+R()*0.9,0,7);g.fill();}
+    g.lineCap='round';
+    for(let ry=T/3*0.5; ry<MH; ry+=T/3){
+      let x=R()*30;
+      while(x<MW){const len=6+R()*12; if(R()>0.34){g.strokeStyle='rgba(92,62,34,.2)';g.lineWidth=1.6;const jy=ry+(R()-0.5)*2;g.beginPath();g.moveTo(x,jy);g.lineTo(x+len,jy+(R()-0.5)*1.5);g.stroke();} x+=len+3+R()*8;}
+    }
+    g.lineCap='butt';
     if(winter){
-      for(let i=0;i<Math.floor(MW*MH/950);i++){const x=R()*MW,y=R()*MH,r=5+R()*11; // soft drifts
-        const gr=g.createRadialGradient(x,y-1,0,x,y,r);gr.addColorStop(0,'rgba(255,255,255,.5)');gr.addColorStop(1,'rgba(255,255,255,0)');
-        g.fillStyle=gr;g.beginPath();g.ellipse(x,y,r,r*0.7,0,0,7);g.fill();}
-      for(let i=0;i<Math.floor(MW*MH/2600);i++){g.fillStyle=R()>0.5?'rgba(255,255,255,.95)':'rgba(202,222,242,.8)';g.fillRect(R()*MW,R()*MH,R()>0.7?2:1,1);} // sparkle
-      for(let i=0;i<Math.floor(MW*MH/5000);i++){const x=R()*MW,y=R()*MH;g.fillStyle='rgba(120,92,58,.35)';g.beginPath();g.ellipse(x,y,2+R()*2,1.1,0,0,7);g.fill();} // sparse earth peek
-    } else {
-      for(let i=0;i<Math.floor(MW*MH/360);i++){const x=R()*MW,y=R()*MH,rx=1.4+R()*2.2,ry=rx*(0.7+R()*0.3); // clods
-        g.fillStyle='rgba(84,58,32,.32)';g.beginPath();g.ellipse(x+0.9,y+0.9,rx,ry,R()*3,0,7);g.fill();
-        g.fillStyle='rgba(196,158,108,.36)';g.beginPath();g.ellipse(x-0.7,y-0.7,rx*0.85,ry*0.85,R()*3,0,7);g.fill();}
-      for(let i=0;i<Math.floor(MW*MH/2600);i++){const x=R()*MW,y=R()*MH;g.fillStyle=R()>0.5?'rgba(150,138,120,.5)':'rgba(120,108,92,.5)';g.beginPath();g.arc(x,y,0.8+R()*0.9,0,7);g.fill();} // pebbles
-      g.lineCap='round';                                   // short broken furrow hints along the groove lines
-      for(let ry=T/3*0.5; ry<MH; ry+=T/3){
-        let x=R()*30;
-        while(x<MW){const len=6+R()*12; if(R()>0.34){g.strokeStyle='rgba(92,62,34,.2)';g.lineWidth=1.6;const jy=ry+(R()-0.5)*2;g.beginPath();g.moveTo(x,jy);g.lineTo(x+len,jy+(R()-0.5)*1.5);g.stroke();} x+=len+3+R()*8;}
+      // SEMI-TRANSPARENT snow layer (~40% coverage) — brown earth still clearly reads
+      // 1) snow settled in the furrow grooves — overlapping FEATHERED blobs merge into
+      //    irregular ribbons (not stamped ellipses); earth still reads between them
+      for(let gy=T*0.25; gy<MH+T; gy+=T/3){
+        g.fillStyle='rgba(210,226,244,.3)';g.fillRect(0,gy+2,MW,2);   // faint continuous blue trough
+        let x=R()*20;
+        while(x<MW){ const w=7+R()*16;
+          if(R()>0.4){ const bx=x+w/2, by=gy+(R()-0.5)*2.5, br=w*0.55;
+            const gr=g.createRadialGradient(bx,by-1,0,bx,by,br);
+            gr.addColorStop(0,'rgba(250,253,255,.6)');gr.addColorStop(0.65,'rgba(248,252,255,.32)');gr.addColorStop(1,'rgba(248,252,255,0)');
+            g.fillStyle=gr;g.beginPath();g.ellipse(bx,by,br,2.8+R()*1.4,0,0,7);g.fill();
+          }
+          x+=w*0.68+2+R()*6;                                          // overlap → merged ribbon
+        }
       }
-      g.lineCap='butt';
+      // 2) scattered soft drifts (translucent → earth shows through)
+      for(let i=0;i<Math.floor(MW*MH/1500);i++){const x=R()*MW,y=R()*MH,r=5+R()*12;
+        const gr=g.createRadialGradient(x,y-1,0,x,y,r);gr.addColorStop(0,'rgba(250,253,255,.5)');gr.addColorStop(0.6,'rgba(250,253,255,.22)');gr.addColorStop(1,'rgba(250,253,255,0)');
+        g.fillStyle=gr;g.beginPath();g.ellipse(x,y,r,r*0.66,0,0,7);g.fill();}
+      // 3) sparkle
+      for(let i=0;i<Math.floor(MW*MH/3400);i++){g.fillStyle='rgba(255,255,255,.9)';g.fillRect(R()*MW,R()*MH,R()>0.7?2:1,1);}
     }
     cache[key]=c;return c;
   }
@@ -590,13 +595,30 @@ const ART = (()=>{
       g.fillStyle='#573c22';g.beginPath();g.moveTo(cx-9,cy);g.lineTo(cx-6,cy-34);g.lineTo(cx-2,cy-34);g.lineTo(cx-3,cy);g.closePath();g.fill();
       g.fillStyle='#7d5a38';g.fillRect(cx+3,cy-32,2.5,30);
       if(season==='Winter'){
-        // bare branches + snow caps
-        g.strokeStyle='#5c3f24';g.lineWidth=4;g.lineCap='round';
-        const br=[[-16,-52],[16,-54],[-24,-40],[24,-42],[0,-64]];
-        for(const[bx,by]of br){g.beginPath();g.moveTo(cx,cy-30);g.lineTo(cx+bx,cy+by);g.stroke();}
-        g.fillStyle='rgba(240,246,252,.9)';
-        for(const[bx,by]of br){g.beginPath();g.ellipse(cx+bx,cy+by,6,3,0,0,7);g.fill();}
-        g.beginPath();g.ellipse(cx,cy-30,10,4,0,0,7);g.fill();
+        // snow-laden BARE tree: forking limbs give canopy mass; chunky snow caps
+        const rnd=mulberry32(31), tips=[];
+        // faint snowy halo suggests a laden crown
+        g.fillStyle='rgba(232,240,250,.16)';g.beginPath();g.arc(cx,cy-48,25,0,7);g.fill();
+        g.lineCap='round';
+        function limb(x0,y0,ang,len,w,depth){
+          const x1=x0+Math.cos(ang)*len, y1=y0+Math.sin(ang)*len;
+          g.strokeStyle='#5c3f24';g.lineWidth=w;g.beginPath();g.moveTo(x0,y0);g.lineTo(x1,y1);g.stroke();
+          g.strokeStyle='#6f4e2f';g.lineWidth=Math.max(1,w*0.42);g.beginPath();g.moveTo(x0,y0);g.lineTo((x0+x1)/2,(y0+y1)/2);g.stroke();
+          if(depth<=0){tips.push([x1,y1,w]);return;}
+          const sp=0.4+rnd()*0.2;
+          limb(x1,y1,ang-sp,len*0.74,Math.max(1.6,w*0.64),depth-1);
+          limb(x1,y1,ang+sp,len*0.74,Math.max(1.6,w*0.64),depth-1);
+          if(depth>=2 && rnd()<0.7) limb(x1,y1,ang+(rnd()-0.5)*0.4,len*0.62,Math.max(1.5,w*0.55),depth-1);
+        }
+        limb(cx,cy-32,-Math.PI/2,26,6.5,3);
+        limb(cx-2,cy-30,-Math.PI/2-0.52,21,5.5,3);
+        limb(cx+2,cy-30,-Math.PI/2+0.52,21,5.5,3);
+        g.lineCap='butt';
+        // chunky snow caps on branch tips + crown, base mound
+        g.fillStyle='rgba(249,253,255,.95)';
+        for(const[tx,ty,w] of tips){g.beginPath();g.ellipse(tx,ty-1,3.4+w*0.5,2.4,0,0,7);g.fill();}
+        g.beginPath();g.ellipse(cx,cy-40,10,4.5,0,0,7);g.fill();          // crown snow
+        g.fillStyle='rgba(244,249,255,.92)';g.beginPath();g.ellipse(cx,cy-1,15,5,0,0,7);g.fill(); // base snow mound
       } else {
         const pal = season==='Fall'
           ? {d:'#a4551f',m:'#c96a2e',l:'#e0902a',hl:'#f2c04a'}
@@ -1507,7 +1529,7 @@ const Game=(()=>{
     const winter=world.season==='Winter';
     const field=ART.soilField(world.season);
     // 1) soft dug-out shadow cast on the grass, ONLY on the plot's outer perimeter
-    const ringCol= winter?'rgba(150,166,196,.28)':'rgba(30,18,8,.22)';
+    const ringCol= winter?'rgba(116,134,170,.4)':'rgba(30,18,8,.22)';
     for(let i=0;i<world.soil.length;i++){
       if(!world.soil[i])continue;
       const x=(i%world.w),y=(i/world.w)|0, px=x*T,py=y*T;
@@ -1522,7 +1544,8 @@ const Game=(()=>{
       const s=world.soil[i];if(!s)continue;
       const x=(i%world.w),y=(i/world.w)|0, px=x*T,py=y*T;
       g.drawImage(field, px,py,T,T, px,py,T,T);
-      if(s.watered && !winter){ // subtle damp: cool tone + soft sheen (kept low so no checker)
+      if(winter){ drawWinterEdgeDrifts(x,y); }
+      else if(s.watered){ // subtle damp: cool tone + soft sheen (kept low so no checker)
         g.fillStyle='rgba(38,52,68,.09)';g.fillRect(px,py,T,T);
         const gr=g.createLinearGradient(px,py,px+T*0.7,py+T);gr.addColorStop(0,'rgba(150,175,205,.11)');gr.addColorStop(0.5,'rgba(150,175,205,0)');
         g.fillStyle=gr;g.fillRect(px,py,T,T);
@@ -1536,15 +1559,27 @@ const Game=(()=>{
       drawCrop(x,y,c);
     }
   }
+  // Snow piled along the plot's grass-facing perimeter (drift look) — winter only.
+  function drawWinterEdgeDrifts(x,y){
+    const px=x*T,py=y*T, W=13;
+    const up=hasSoil(x,y-1),dn=hasSoil(x,y+1),lf=hasSoil(x-1,y),rt=hasSoil(x+1,y);
+    if(up&&dn&&lf&&rt)return;
+    g.save();
+    if(!up){const gr=g.createLinearGradient(0,py+1,0,py+1+W);gr.addColorStop(0,'rgba(250,253,255,.9)');gr.addColorStop(1,'rgba(250,253,255,0)');g.fillStyle=gr;g.fillRect(px,py+1,T,W);}
+    if(!dn){const gr=g.createLinearGradient(0,py+T-1-W,0,py+T-1);gr.addColorStop(0,'rgba(250,253,255,0)');gr.addColorStop(1,'rgba(250,253,255,.9)');g.fillStyle=gr;g.fillRect(px,py+T-1-W,T,W);}
+    if(!lf){const gr=g.createLinearGradient(px+1,0,px+1+W,0);gr.addColorStop(0,'rgba(250,253,255,.85)');gr.addColorStop(1,'rgba(250,253,255,0)');g.fillStyle=gr;g.fillRect(px+1,py,W,T);}
+    if(!rt){const gr=g.createLinearGradient(px+T-1-W,0,px+T-1,0);gr.addColorStop(0,'rgba(250,253,255,0)');gr.addColorStop(1,'rgba(250,253,255,.85)');g.fillStyle=gr;g.fillRect(px+T-1-W,py,W,T);}
+    g.restore();
+  }
   // Soft inner AO ONLY on sides facing grass/path (never between two soil tiles) → one rim per plot, no grid.
   function drawSoilEdges(x,y,winter){
     const px=x*T,py=y*T;
     const up=hasSoil(x,y-1),dn=hasSoil(x,y+1),lf=hasSoil(x-1,y),rt=hasSoil(x+1,y);
     if(up&&dn&&lf&&rt)return; // fully interior — nothing
-    const dk= winter?'rgba(96,116,150,':'rgba(20,12,5,'; const A=winter?'.34)':'.42)';
+    const dk= winter?'rgba(66,84,118,':'rgba(20,12,5,'; const A=winter?'.5)':'.42)';
     g.save();
     if(!up){const gr=g.createLinearGradient(0,py,0,py+7);gr.addColorStop(0,dk+A);gr.addColorStop(1,dk+'0)');g.fillStyle=gr;g.fillRect(px,py,T,7);
-      g.fillStyle= winter?'rgba(255,255,255,.4)':'rgba(150,120,84,.3)';g.fillRect(px,py,T,1.5);}
+      g.fillStyle= winter?'rgba(255,255,255,.55)':'rgba(150,120,84,.3)';g.fillRect(px,py,T,1.5);}
     if(!dn){const gr=g.createLinearGradient(0,py+T-7,0,py+T);gr.addColorStop(0,dk+'0)');gr.addColorStop(1,dk+A);g.fillStyle=gr;g.fillRect(px,py+T-7,T,7);}
     if(!lf){const gr=g.createLinearGradient(px,0,px+7,0);gr.addColorStop(0,dk+A);gr.addColorStop(1,dk+'0)');g.fillStyle=gr;g.fillRect(px,py,7,T);}
     if(!rt){const gr=g.createLinearGradient(px+T-7,0,px+T,0);gr.addColorStop(0,dk+'0)');gr.addColorStop(1,dk+A);g.fillStyle=gr;g.fillRect(px+T-7,py,7,T);}
@@ -1786,10 +1821,12 @@ const Game=(()=>{
       g.fillStyle=`rgba(14,20,52,${amb.dark})`;
       g.fillRect(0,0,canvas.width,canvas.height);
     }
-    // gentle cool moonlight fill lifts shadows so beds stay readable at night
-    if(amb.night>0.1){
+    // gentle fill lifts shadows so crop silhouettes stay legible on dark (dusk/night) scenes
+    if(amb.dark>0.14){
       g.globalCompositeOperation='lighter';
-      g.fillStyle=`rgba(96,122,178,${0.05+0.05*amb.night})`;
+      const lift = amb.night>0.1 ? (0.06+0.06*amb.night) : (0.02+amb.dark*0.16); // dusk gets a warm-cool lift too
+      const col = amb.night>0.1 ? '96,122,178' : '150,132,150';
+      g.fillStyle=`rgba(${col},${lift})`;
       g.fillRect(0,0,canvas.width,canvas.height);
       g.globalCompositeOperation='source-over';
     }
@@ -1847,12 +1884,13 @@ const Game=(()=>{
       g.save();g.globalCompositeOperation='multiply';g.fillStyle='rgba(120,142,178,0.34)';g.fillRect(0,0,canvas.width,canvas.height);g.restore();
       g.fillStyle='rgba(34,46,70,0.12)';g.fillRect(0,0,canvas.width,canvas.height);
       const n=230;
-      while(weatherParts.length<n)weatherParts.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,s:0.5+Math.random(),o:Math.random()});
-      g.strokeStyle='rgba(190,212,238,.55)';g.lineWidth=1.2*DPR;g.lineCap='round';
+      while(weatherParts.length<n)weatherParts.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,s:0.5+Math.random(),o:Math.random(),len:8+Math.random()*12,ang:0.14+Math.random()*0.12,wob:Math.random()*6.28,thin:0.8+Math.random()*0.9});
+      g.lineCap='round';
       for(const p of weatherParts){
-        p.y+=p.s*18*DPR;p.x+=2.4*DPR;
-        g.globalAlpha=0.35+p.s*0.4;
-        g.beginPath();g.moveTo(p.x,p.y);g.lineTo(p.x-2.4*DPR,p.y+12*DPR*p.s);g.stroke();
+        const vy=p.s*18*DPR, vx=p.ang*vy;              // per-drop angle
+        p.y+=vy;p.x+=vx;
+        g.strokeStyle=`rgba(190,212,238,${0.28+p.s*0.42})`;g.lineWidth=p.thin*DPR;
+        g.beginPath();g.moveTo(p.x,p.y);g.lineTo(p.x-p.ang*p.len*DPR, p.y+p.len*DPR*p.s);g.stroke();
         if(p.y>canvas.height){ if(Math.random()<0.5)splashes.push({x:p.x,y:canvas.height*(0.35+Math.random()*0.6),a:0}); p.y=-10;p.x=Math.random()*canvas.width; }
       }
       g.globalAlpha=1;g.lineCap='butt';
@@ -1921,8 +1959,10 @@ const Game=(()=>{
     g.save();g.globalCompositeOperation='lighter';
     for(let i=0;i<10;i++){const a=titleT*0.12+i*Math.PI/5; g.save();g.translate(sx,sy);g.rotate(a);
       const w0=18*DPR, len=SR*4.4;
-      const shaft=g.createLinearGradient(0,0,0,len);shaft.addColorStop(0,'rgba(255,246,206,0.16)');shaft.addColorStop(0.5,'rgba(255,242,196,0.06)');shaft.addColorStop(1,'rgba(255,242,196,0)');
-      g.fillStyle=shaft;g.beginPath();g.moveTo(-w0*0.4,0);g.lineTo(-w0*2.2,len);g.lineTo(w0*2.2,len);g.lineTo(w0*0.4,0);g.closePath();g.fill();g.restore();}
+      // fade in from the disc (not a hard band at the top) and out with distance
+      const shaft=g.createLinearGradient(0,0,0,len);
+      shaft.addColorStop(0,'rgba(255,246,206,0)');shaft.addColorStop(0.12,'rgba(255,246,206,0.12)');shaft.addColorStop(0.45,'rgba(255,242,196,0.05)');shaft.addColorStop(1,'rgba(255,242,196,0)');
+      g.fillStyle=shaft;g.beginPath();g.moveTo(-w0*0.4,0);g.lineTo(-w0*2.4,len);g.lineTo(w0*2.4,len);g.lineTo(w0*0.4,0);g.closePath();g.fill();g.restore();}
     g.restore();
     // sun disc with soft edge
     const disc=g.createRadialGradient(sx,sy-6*DPR,2,sx,sy,SR*0.72);disc.addColorStop(0,'#fffdf2');disc.addColorStop(0.7,'#fff2c8');disc.addColorStop(1,'rgba(255,238,180,0.65)');
