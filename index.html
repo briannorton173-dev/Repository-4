@@ -47,6 +47,7 @@
   .slot .ic img,img.slotimg{width:32px;height:32px;object-fit:contain;display:block;image-rendering:auto}
   img.em{width:30px;height:30px;object-fit:contain;vertical-align:middle;display:inline-block}
   img.coinico{width:22px;height:22px;object-fit:contain;vertical-align:middle;filter:drop-shadow(0 1px 0 rgba(0,0,0,.35))}
+  img.btnico{width:22px;height:22px;object-fit:contain;vertical-align:middle}
   #brandMark{width:66px;height:66px;object-fit:contain;filter:drop-shadow(0 3px 2px rgba(60,30,10,.4))}
   #storeMark{width:32px;height:32px;object-fit:contain;vertical-align:middle}
   .slot .lb{font-size:9px;color:#c9b48c;font-weight:600;letter-spacing:.3px}
@@ -134,9 +135,9 @@
   <div id="toolbar"></div>
 
   <div id="sidebtns">
-    <button class="btn" id="btnShop">🏪 <span>Shop</span> <span class="muted" style="font-weight:600">B</span></button>
-    <button class="btn primary" id="btnSleep">🛏️ <span>Sleep</span> <span style="opacity:.7;font-weight:600">Enter</span></button>
-    <button class="btn" id="btnHelp">❔ <span>Help</span></button>
+    <button class="btn" id="btnShop"><img class="btnico" id="btnShopIc" alt="" /> <span>Shop</span> <span class="muted" style="font-weight:600">B</span></button>
+    <button class="btn primary" id="btnSleep"><img class="btnico" id="btnSleepIc" alt="" /> <span>Sleep</span> <span style="opacity:.7;font-weight:600">Enter</span></button>
+    <button class="btn" id="btnHelp"><img class="btnico" id="btnHelpIc" alt="" /> <span>Help</span></button>
   </div>
 </div>
 
@@ -482,8 +483,7 @@ const ART = (()=>{
   function drawFarmer(g,S,dir,frame){
     const cx=S/2; const bob=frame? -1:0; const legSwing=frame?3:-3;
     g.save();g.translate(0, bob);
-    // shadow
-    g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.ellipse(cx,S*1.28,S*0.28,S*0.09,0,0,7);g.fill();
+    // (contact shadow drawn in-engine, season-tinted)
     const skin='#f0c49a', skinD='#d8a678', shirt='#3f7bd6', shirtD='#2f5fa8', pants='#4a3826', hat='#c96a2e', hatD='#a8531f', hair='#5a3b22';
     // legs
     g.fillStyle=pants;
@@ -569,7 +569,6 @@ const ART = (()=>{
     }
     // house
     {const c=make(T*3,T*3),g=c.getContext('2d');const w=T*2.6,h=T*1.7,x=(c.width-w)/2,y=T*1.1;
-     g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.ellipse(c.width/2,y+h+4,w*0.55,10,0,0,7);g.fill();
      g.fillStyle='#c9b088';g.fillRect(x,y,w,h);
      g.fillStyle='#b89a6e';for(let i=0;i<w;i+=8)g.fillRect(x+i,y,1,h);
      // roof
@@ -582,13 +581,11 @@ const ART = (()=>{
      p.house=c;}
     // coop
     {const c=make(T*2,T*1.8),g=c.getContext('2d');const w=T*1.6,h=T*1.0,x=(c.width-w)/2,y=T*0.7;
-     g.fillStyle='rgba(0,0,0,.22)';g.beginPath();g.ellipse(c.width/2,y+h+3,w*0.55,8,0,0,7);g.fill();
      g.fillStyle='#d8c090';g.fillRect(x,y,w,h);g.fillStyle='#8a5a38';g.beginPath();g.moveTo(x-6,y);g.lineTo(x+w/2,y-20);g.lineTo(x+w+6,y);g.closePath();g.fill();
      g.fillStyle='#5a3d22';roundRect(g,c.width/2-8,y+h-20,16,20,6);g.fill();
      p.coop=c;}
     // chicken
     {const c=make(24,24),g=c.getContext('2d');
-     g.fillStyle='rgba(0,0,0,.2)';g.beginPath();g.ellipse(12,21,7,2,0,0,7);g.fill();
      g.fillStyle='#fff';g.beginPath();g.ellipse(12,14,7,6,0,0,7);g.fill();
      g.beginPath();g.arc(12,8,4,0,7);g.fill();
      g.fillStyle='#e0503f';g.beginPath();g.arc(11,5,2,0,7);g.fill();
@@ -598,7 +595,6 @@ const ART = (()=>{
      p.chicken=c;}
     // cow
     {const c=make(30,26),g=c.getContext('2d');
-     g.fillStyle='rgba(0,0,0,.2)';g.beginPath();g.ellipse(15,23,10,2,0,0,7);g.fill();
      g.fillStyle='#f4f0ea';roundRect(g,4,10,22,11,5);g.fill();
      g.fillStyle='#3a3a3a';g.beginPath();g.arc(9,13,3,0,7);g.fill();g.beginPath();g.arc(20,17,3.5,0,7);g.fill();
      g.fillStyle='#f4f0ea';g.beginPath();g.arc(24,10,5,0,7);g.fill();
@@ -662,6 +658,18 @@ const ART = (()=>{
     if(name==='energy'){ ishadow(g,m,10);
       g.fillStyle='#e0902a';g.beginPath();g.moveTo(m+3,m-13);g.lineTo(m-7,m+2);g.lineTo(m-1,m+2);g.lineTo(m-4,m+13);g.lineTo(m+8,m-4);g.lineTo(m+1,m-4);g.closePath();g.fill();
       g.fillStyle='#f7d94a';g.beginPath();g.moveTo(m+2,m-11);g.lineTo(m-5,m+1);g.lineTo(m,m+1);g.lineTo(m-3,m+10);g.lineTo(m+6,m-3);g.lineTo(m,m-3);g.closePath();g.fill();return; }
+    if(name==='bed'){ ishadow(g,m,12);
+      g.fillStyle='#8a5a38';roundRect(g,m-13,m-8,26,16,3);g.fill();
+      g.fillStyle='#e8ecf2';roundRect(g,m-11,m-6,9,6,2);g.fill();          // pillow
+      g.fillStyle='#c9556a';roundRect(g,m-2,m-6,13,12,2);g.fill();          // quilt
+      g.fillStyle='#e0788a';for(let i=0;i<2;i++)g.fillRect(m+1+i*5,m-6,2,12);
+      g.fillStyle='#6b4224';g.fillRect(m-13,m-11,3,19);g.fillRect(m+10,m-4,3,12);
+      return; }
+    if(name==='help'){ ishadow(g,m,12);
+      g.fillStyle='#3a7d34';g.beginPath();g.arc(m,m,13,0,7);g.fill();
+      g.fillStyle='#5aa54e';g.beginPath();g.arc(m,m,11,0,7);g.fill();
+      g.fillStyle='#f6ead2';g.font='bold 18px Georgia,serif';g.textAlign='center';g.textBaseline='middle';g.fillText('?',m,m+1);
+      return; }
     if(name==='store'){ // little storefront/barn mark
       ishadow(g,m,13);
       g.fillStyle='#b8503f';g.beginPath();g.moveTo(m-13,m-2);g.lineTo(m,m-13);g.lineTo(m+13,m-2);g.closePath();g.fill();
@@ -1481,16 +1489,30 @@ const Game=(()=>{
     if(!rt){const gr=g.createLinearGradient(px+T-8,0,px+T,0);gr.addColorStop(0,'rgba(20,12,5,0)');gr.addColorStop(1,'rgba(20,12,5,.5)');g.fillStyle=gr;g.fillRect(px+T-8,py,8,T);}
     g.restore();
   }
-  // Snow settled on tilled beds — soft drifts, frozen sheen, crumbs peeking through.
+  // Snow settled on tilled beds — irregular broken drifts caught in the furrows, earth showing through.
   function drawWinterSoil(x,y){
     const px=x*T,py=y*T; const rnd=mulberry32(x*131+y*57+9), R=()=>rnd();
     g.save();
-    g.fillStyle='rgba(206,224,240,.24)';g.fillRect(px,py,T,T);              // frozen bluish sheen
-    for(let i=0;i<7;i++){const sx=px+R()*T, sy=py+R()*R()*T, r=4+R()*7;      // snow drifts biased upward
-      const gr=g.createRadialGradient(sx,sy-1,0,sx,sy,r);gr.addColorStop(0,'rgba(255,255,255,.9)');gr.addColorStop(0.7,'rgba(248,251,255,.5)');gr.addColorStop(1,'rgba(248,251,255,0)');
-      g.fillStyle=gr;g.beginPath();g.ellipse(sx,sy,r,r*0.8,0,0,7);g.fill();}
-    if(!hasSoil(x,y-1)){g.fillStyle='rgba(255,255,255,.75)';g.fillRect(px,py,T,4);} // snow ridge on exposed top
-    g.fillStyle='rgba(255,255,255,.9)';for(let i=0;i<4;i++)g.fillRect(px+R()*T,py+R()*T,R()>0.6?2:1,1); // sparkle
+    g.fillStyle='rgba(198,216,234,.13)';g.fillRect(px,py,T,T);                // faint frozen sheen
+    // broken snow drifts settled into the furrow grooves (irregular, gappy)
+    for(let ri=0;ri<3;ri++){
+      const cy=py+(ri+0.5)/3*T - 3 + (R()-0.5)*3;
+      let sx=px+1+R()*6;
+      while(sx<px+T-2){
+        const w=3+R()*9;
+        if(R()>0.4){ // ~60% covered, rest bare earth
+          g.fillStyle='rgba(216,230,246,.55)';g.beginPath();g.ellipse(sx+w/2,cy+2,w*0.55,2,0,0,7);g.fill(); // soft under-shadow
+          g.fillStyle='rgba(250,253,255,.94)';g.beginPath();g.ellipse(sx+w/2,cy+(R()-0.5)*1.5,w*0.5,1.8+R()*0.8,0,0,7);g.fill();
+        }
+        sx+=w+2+R()*7;
+      }
+    }
+    // a couple of soft irregular drift patches
+    for(let i=0;i<2;i++){ if(R()<0.4)continue; const dx=px+3+R()*(T-6), dy=py+3+R()*R()*(T-6), r=4+R()*4;
+      const gr=g.createRadialGradient(dx,dy-1,0,dx,dy,r);gr.addColorStop(0,'rgba(252,254,255,.85)');gr.addColorStop(1,'rgba(252,254,255,0)');
+      g.fillStyle=gr;g.beginPath();g.ellipse(dx,dy,r,r*0.7,0,0,7);g.fill();}
+    if(!hasSoil(x,y-1)){g.fillStyle='rgba(252,254,255,.8)';g.fillRect(px,py,T,3.5);} // snow ridge on exposed top
+    g.fillStyle='rgba(255,255,255,.9)';for(let i=0;i<3;i++)g.fillRect(px+R()*T,py+R()*T,R()>0.6?2:1,1); // sparkle
     g.restore();
   }
   // Each crop gets a DISTINCT silhouette + leaf hue so a mixed bed reads varied.
@@ -1648,20 +1670,27 @@ const Game=(()=>{
     const props=ART.props();
     // sort by y for depth
     const list=world.props.slice().sort((a,b)=>a.ty-b.ty);
+    const winter=world.season==='Winter';
+    const shCol= winter?'rgba(90,112,156,':'rgba(0,0,0,';
     for(const p of list){
       let img=props[p.type];if(!img)continue;
       if(p.type==='tree') img=img[world.season]||img.Summer;
       const w=img.width, h=img.height;
-      g.drawImage(img, p.tx*T + T/2 - w/2, (p.ty+1)*T - h, w, h);
+      // season-tinted soft contact shadow (blue on snow, not grey)
+      const dx=p.tx*T+T/2, dy=(p.ty+1)*T;
+      const sw= p.type==='house'? w*0.30 : p.type==='coop'? w*0.34 : T*0.6;
+      const soff= p.type==='tree'? 3 : 2, sa= p.type==='tree'?0.24:0.26;
+      g.fillStyle=shCol+sa+')';g.beginPath();g.ellipse(dx,dy+soff,sw,sw*0.28,0,0,7);g.fill();
+      g.drawImage(img, dx - w/2, dy - h, w, h);
     }
     // shop sign — small drawn storefront on a post
     const st=world.shopTile, sx=(st.x+0.5)*T, sy=(st.y+1)*T-4;
-    g.fillStyle='rgba(0,0,0,.18)';g.beginPath();g.ellipse(sx,sy+2,13,4,0,0,7);g.fill();
+    g.fillStyle=shCol+'0.2)';g.beginPath();g.ellipse(sx,sy+2,13,4,0,0,7);g.fill();
     g.fillStyle='#7d5227';g.fillRect(sx-2,sy-14,4,14);
     const sic=ART.iconCanvas('store');g.drawImage(sic,sx-16,sy-34,32,32);
     // bed — drawn quilt bed
     const bx=(world.bedTile.x+0.5)*T, byB=(world.bedTile.y+0.7)*T;
-    g.fillStyle='rgba(0,0,0,.16)';g.beginPath();g.ellipse(bx,byB+9,15,4,0,0,7);g.fill();
+    g.fillStyle=shCol+'0.18)';g.beginPath();g.ellipse(bx,byB+9,15,4,0,0,7);g.fill();
     g.fillStyle='#8a5a38';ART.roundRect(g,bx-13,byB-12,26,22,4);g.fill();
     g.fillStyle='#e8ecf2';ART.roundRect(g,bx-11,byB-10,22,9,3);g.fill();           // pillow
     g.fillStyle='#c9556a';ART.roundRect(g,bx-11,byB-2,22,10,3);g.fill();           // quilt
@@ -1673,6 +1702,9 @@ const Game=(()=>{
     for(const a of animals){
       const img= a.type==='chicken'?props.chicken:props.cow;
       const bob=Math.sin(performance.now()/300+a.tx)*1.5;
+      // season-tinted contact shadow (blue on snow)
+      g.fillStyle= world.season==='Winter'?'rgba(90,112,156,.28)':'rgba(0,0,0,.22)';
+      g.beginPath();g.ellipse(a.ax, a.ay-2, img.width*0.34, img.width*0.1, 0,0,7);g.fill();
       g.drawImage(img, a.ax-img.width/2, a.ay-img.height + bob);
       if(a.hasProduct){ // small drawn product bubble floating above
         const py=a.ay-img.height-14+Math.sin(performance.now()/300)*2, ic=ART.iconCanvas(a.type==='chicken'?'egg':'milk');
@@ -1684,6 +1716,9 @@ const Game=(()=>{
     const sheet=ART.farmer();
     const frames=sheet[player.dir];
     const img=frames[player.moving?player.frame:0];
+    // season-tinted contact shadow
+    g.fillStyle= world.season==='Winter'?'rgba(90,112,156,.28)':'rgba(0,0,0,.26)';
+    g.beginPath();g.ellipse(player.px+T/2, player.py+T-3, T*0.26, T*0.09, 0,0,7);g.fill();
     g.drawImage(img, player.px+T/2-img.width/2, player.py+T - img.height + 2);
   }
   function drawFacingHighlight(){
@@ -2038,7 +2073,7 @@ const Game=(()=>{
   function renderShop(){
     el('shopGold').textContent=gold;
     const tabs=el('shopTabs');tabs.innerHTML='';
-    [['buy','🌱 Seeds'],['sell','💰 Sell'],['upgrade','⭐ Upgrades']].forEach(([id,label])=>{
+    [['buy','Seeds'],['sell','Sell'],['upgrade','Upgrades']].forEach(([id,label])=>{
       const t=document.createElement('div');t.className='tab'+(shopTab===id?' active':'');t.textContent=label;
       t.onclick=()=>{shopTab=id;renderShop();AUDIO.play('ui');};tabs.appendChild(t);
     });
@@ -2266,6 +2301,9 @@ const Game=(()=>{
     document.documentElement.style.setProperty('--wheat',`url(${ART.icon('crop_wheat')})`);
     el('gGold').src=ART.icon('coin');
     el('shopCoin').src=ART.icon('coin');
+    el('btnShopIc').src=ART.icon('store');
+    el('btnSleepIc').src=ART.icon('bed');
+    el('btnHelpIc').src=ART.icon('help');
     world=new World(); player={px:15*T,py:12*T,dir:'down',moving:false,anim:0,frame:0};
     refreshContinue();
     start();
